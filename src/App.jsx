@@ -1,30 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
 
-// ─────────────────────────────────────────────────────────────────────────────
-// LIVE DATA CONFIG
-// ─────────────────────────────────────────────────────────────────────────────
-// Set your free EIA API key here (get one free at https://www.eia.gov/opendata/)
-// Without a key the dashboard still works — it falls back to Yahoo Finance
-// via a public CORS proxy for the Brent price, and shows EIA annual figures
-// as static verified data.
 const EIA_API_KEY = import.meta?.env?.VITE_EIA_API_KEY || "";
 
-// ─────────────────────────────────────────────────────────────────────────────
-// VERIFIED HISTORICAL DATA  (source annotations inline)
-// All oil flow figures from EIA official reports; transit counts from
-// Lloyd's List Intelligence / AIS aggregates; LNG from IEA/EIA annual reports
-// ─────────────────────────────────────────────────────────────────────────────
-//
-// KEY CORRECTIONS vs previous version:
-//  • 2023 oil: raised from 20.1→20.9 Mb/d  (EIA 2023 annual, Statista/EIA)
-//  • 2024 oil: confirmed 20.0 Mb/d          (EIA June 2025 Today-in-Energy)
-//  • H1 2025 oil: raised to 20.9 Mb/d       (EIA World Chokepoints H1-2025)
-//  • Asia destination share: 83–84%         (EIA 2023/2024; IEA Feb 2026)
-//  • Monthly granularity: interpolated from verified annual anchors
-//    (EIA does not publish monthly Hormuz totals publicly)
-
 const MONTHS = [
-  // ── 2023 ── EIA annual anchor: 20.9 Mb/d, ~77 MT/yr LNG ──────────────────
   { id:"2023-01", label:"Jan 2023", transits:106, oil:21.0, lng:77, dwt:10.2, era:"normal",  src:"EIA", note:null },
   { id:"2023-02", label:"Feb 2023", transits:105, oil:21.0, lng:77, dwt:10.2, era:"normal",  src:"EIA", note:null },
   { id:"2023-03", label:"Mar 2023", transits:107, oil:21.0, lng:78, dwt:10.2, era:"normal",  src:"EIA", note:null },
@@ -37,7 +15,6 @@ const MONTHS = [
   { id:"2023-10", label:"Oct 2023", transits:107, oil:20.9, lng:78, dwt:10.2, era:"normal",  src:"EIA", note:"Oct 7 Hamas attack — insurance risk premiums spike. No Hormuz disruption." },
   { id:"2023-11", label:"Nov 2023", transits:106, oil:20.8, lng:77, dwt:10.1, era:"tension", src:"EIA", note:"Houthi attacks begin on Red Sea / Gulf shipping. War-risk zones expanded." },
   { id:"2023-12", label:"Dec 2023", transits:104, oil:20.7, lng:77, dwt:10.0, era:"tension", src:"EIA", note:"Operation Prosperity Guardian. Container lines divert to Cape of Good Hope." },
-  // ── 2024 ── EIA annual anchor: 20.0 Mb/d ─────────────────────────────────
   { id:"2024-01", label:"Jan 2024", transits:103, oil:20.2, lng:76, dwt:9.9,  era:"tension", src:"EIA", note:"Suez Canal traffic -50%. Saudi Arabia boosts East-West pipeline to avoid Bab el-Mandeb." },
   { id:"2024-02", label:"Feb 2024", transits:104, oil:20.1, lng:77, dwt:10.0, era:"tension", src:"EIA", note:null },
   { id:"2024-03", label:"Mar 2024", transits:105, oil:20.1, lng:77, dwt:10.0, era:"tension", src:"EIA", note:"US/UK airstrikes on Houthi Yemen targets. Hormuz unaffected." },
@@ -50,21 +27,18 @@ const MONTHS = [
   { id:"2024-10", label:"Oct 2024", transits:103, oil:19.8, lng:76, dwt:9.8,  era:"tension", src:"EIA", note:"Israel strikes Iran (Oct 26). VLCC war-risk premiums spike 300–400%." },
   { id:"2024-11", label:"Nov 2024", transits:102, oil:19.7, lng:75, dwt:9.7,  era:"tension", src:"EIA", note:"US election. Iran repositions IRGC naval assets. Ghost fleet activity elevated." },
   { id:"2024-12", label:"Dec 2024", transits:100, oil:19.5, lng:75, dwt:9.6,  era:"tension", src:"EIA", note:"US carrier groups repositioned to Gulf region. IRGC exercises near strait." },
-  // ── 2025 H1 ── EIA anchor: 20.9 Mb/d (H1 2025, World Chokepoints report) ─
   { id:"2025-01", label:"Jan 2025", transits:101, oil:20.4, lng:76, dwt:9.7,  era:"tension",    src:"EIA", note:"EIA H1-2025: flows 'remained relatively flat vs 2024'. Last pre-escalation month." },
   { id:"2025-02", label:"Feb 2025", transits:98,  oil:20.2, lng:74, dwt:9.4,  era:"escalation", src:"EST", note:"US Navy formally deploys additional carrier strike group to Gulf." },
   { id:"2025-03", label:"Mar 2025", transits:93,  oil:19.5, lng:71, dwt:8.9,  era:"escalation", src:"EST", note:"US airstrikes on Houthi Yemen positions intensify. War-risk zones expanded Gulf-wide." },
   { id:"2025-04", label:"Apr 2025", transits:87,  oil:18.5, lng:68, dwt:8.4,  era:"escalation", src:"EST", note:"Iran threatens 'reciprocal measures'. IRGC naval exercises visible on AIS." },
   { id:"2025-05", label:"May 2025", transits:84,  oil:17.8, lng:66, dwt:8.1,  era:"escalation", src:"EST", note:"Some Asian buyers temporarily shift to pipeline/alternative routes." },
   { id:"2025-06", label:"Jun 2025", transits:82,  oil:17.2, lng:64, dwt:7.9,  era:"conflict",   src:"EST", note:"IRGC harassment of non-Iranian tankers reported. P&I clubs revise war exclusion clauses." },
-  // ── 2025 H2 ── post-cutoff estimates ──────────────────────────────────────
   { id:"2025-07", label:"Jul 2025", transits:80,  oil:16.8, lng:63, dwt:7.6,  era:"conflict",   src:"EST", note:"US-Iran back-channel talks. Ghost fleet significantly above seasonal average." },
   { id:"2025-08", label:"Aug 2025", transits:82,  oil:17.0, lng:63, dwt:7.8,  era:"conflict",   src:"EST", note:"Partial stabilization. Saudi/UAE diplomatic channels active." },
   { id:"2025-09", label:"Sep 2025", transits:84,  oil:17.3, lng:64, dwt:8.0,  era:"conflict",   src:"EST", note:"Seasonal Asian crude demand supports partial traffic recovery attempt." },
   { id:"2025-10", label:"Oct 2025", transits:85,  oil:17.5, lng:65, dwt:8.1,  era:"conflict",   src:"EST", note:null },
   { id:"2025-11", label:"Nov 2025", transits:83,  oil:17.2, lng:64, dwt:7.9,  era:"conflict",   src:"EST", note:"Iran OPEC+ negotiating posture hardens. Sanctioned tanker activity elevated." },
   { id:"2025-12", label:"Dec 2025", transits:81,  oil:16.9, lng:63, dwt:7.7,  era:"conflict",   src:"EST", note:"Year-end: traffic ~24% below 2023 normal baseline." },
-  // ── 2026 ── Jan–Feb modeled; Mar REAL CRISIS DATA ─────────────────────────
   { id:"2026-01", label:"Jan 2026", transits:82,  oil:17.0, lng:63, dwt:7.8,  era:"conflict",   src:"EST", note:"Maersk resumes Suez Canal usage (Jan 2026). Hormuz traffic still suppressed." },
   { id:"2026-02", label:"Feb 2026", transits:153, oil:20.5, lng:77, dwt:14.5, era:"conflict",   src:"AIS", note:"Pre-crisis baseline: 153 transits/day (CSIS/Starboard AIS data). US & Israel strike Iran Feb 28 — Khamenei killed. IRGC closes strait immediately." },
   { id:"2026-03", label:"Mar 2026", transits:13,  oil:2.1,  lng:8,  dwt:1.2,  era:"blockade",   src:"AIS", note:"TODAY — STRAIT EFFECTIVELY CLOSED. 90%+ traffic collapse since Mar 1. ~7–13 vessels/day (AIS, MarineTraffic). Only shadow fleet & Iranian vessels transiting. P&I insurance withdrawn Mar 5. 400+ tankers anchored in Persian Gulf. QatarEnergy force majeure on LNG Mar 4. IEA releasing 400M bbl emergency reserves. Oil approaching $200/bbl warnings." },
@@ -78,7 +52,6 @@ const ERA = {
   blockade:   { color:"#ff00ff", label:"⚠ EFFECTIVELY CLOSED",   bg:"rgba(255,0,255,0.10)",   border:"rgba(255,0,255,0.5)"  },
 };
 
-// Source badge colours
 const SRC_COLOR = { EIA:"#00c9a7", EST:"#f0a500", AIS:"#ff79c6" };
 const SRC_LABEL = { EIA:"✓ EIA Verified", EST:"~ Modeled Estimate", AIS:"📡 AIS/Live Tracked" };
 
@@ -128,7 +101,6 @@ const PRODUCERS = [
   { country:"Qatar (LNG)",  share:6.0,  mbpd:0.9, color:"#00c9a7", src:"EIA 2024" },
 ];
 
-// Asia 84% (EIA 2024), Europe 12-14% (IEA), other ~2-4%
 const DESTINATIONS = [
   { region:"China",       share:37, color:"#e84b3a", icon:"🇨🇳" },
   { region:"India",       share:15, color:"#6bcb77", icon:"🇮🇳" },
@@ -140,9 +112,6 @@ const DESTINATIONS = [
 ];
 
 // ─── LIVE DATA HOOKS ──────────────────────────────────────────────────────────
-
-// Fetches Brent spot price from EIA API v2 (requires free key)
-// Falls back to Yahoo Finance via allorigins CORS proxy (no key needed)
 function useLiveBrent() {
   const [data, setData] = useState({ price: null, change: null, changePercent: null, ts: null, source: null, loading: true, error: null });
 
@@ -150,7 +119,6 @@ function useLiveBrent() {
     let cancelled = false;
 
     async function fetchEIA() {
-      // EIA series: PET.RBRTE.D  (Europe Brent Spot Price FOB, Daily)
       const url = `https://api.eia.gov/v2/petroleum/pri/spt/data/?api_key=${EIA_API_KEY}&frequency=daily&data[0]=value&facets[series][]=RBRTE&sort[0][column]=period&sort[0][direction]=desc&length=2`;
       const r = await fetch(url);
       if (!r.ok) throw new Error("EIA non-200");
@@ -167,8 +135,7 @@ function useLiveBrent() {
     }
 
     async function fetchYahoo() {
-      // Yahoo Finance via allorigins proxy — no key required
-      const ticker = "BZ%3DF"; // Brent futures
+      const ticker = "BZ%3DF";
       const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?interval=1d&range=5d`)}`;
       const r = await fetch(proxyUrl, { signal: AbortSignal.timeout(8000) });
       if (!r.ok) throw new Error("proxy non-200");
@@ -183,33 +150,17 @@ function useLiveBrent() {
       return { price, change, changePercent: pct, ts: new Date().toISOString().split("T")[0], source: "Yahoo Finance (via proxy)", loading: false, error: null };
     }
 
-    async function fetchEIAPublic() {
-      // EIA public bulk CSV for Brent — no key, but only weekly
-      const url = "https://www.eia.gov/dnav/pet/hist/RBRTED.htm";
-      throw new Error("HTML-only, skip"); // signal to try next
-    }
-
     async function run() {
-      // Try EIA first if key provided
       if (EIA_API_KEY) {
-        try {
-          const d = await fetchEIA();
-          if (!cancelled) setData(d);
-          return;
-        } catch(e) { console.warn("EIA fetch failed:", e.message); }
+        try { const d = await fetchEIA(); if (!cancelled) setData(d); return; }
+        catch(e) { console.warn("EIA fetch failed:", e.message); }
       }
-      // Fallback: Yahoo via proxy
-      try {
-        const d = await fetchYahoo();
-        if (!cancelled) setData(d);
-        return;
-      } catch(e) { console.warn("Yahoo fetch failed:", e.message); }
-      // Final fallback: last known value
+      try { const d = await fetchYahoo(); if (!cancelled) setData(d); return; }
+      catch(e) { console.warn("Yahoo fetch failed:", e.message); }
       if (!cancelled) setData({ price: 74.2, change: null, changePercent: null, ts: "2026-03-11", source: "Static fallback (APIs unavailable)", loading: false, error: "Live APIs unreachable — showing last known value" });
     }
 
     run();
-    // Refresh every 5 minutes
     const interval = setInterval(run, 5 * 60 * 1000);
     return () => { cancelled = true; clearInterval(interval); };
   }, []);
@@ -217,8 +168,6 @@ function useLiveBrent() {
   return data;
 }
 
-// Fetches EIA weekly Brent historical series for the sparkline
-// Uses public EIA bulk endpoint — no key required
 function useBrentHistory() {
   const [history, setHistory] = useState([]);
   useEffect(() => {
@@ -249,7 +198,7 @@ const Ticker = ({ value, unit, dec=1, color="#00c9a7", size="1.6rem" }) => {
     const t = setInterval(()=>{ s+=step; if(s>=e){setD(e);clearInterval(t);}else setD(s); },16);
     return ()=>clearInterval(t);
   }, [value]);
-  return <span style={{ color, fontFamily:"'Space Mono',monospace", fontWeight:700, fontSize:size }}>{d.toFixed(dec)}<span style={{ fontSize:"0.7em", opacity:0.6, marginLeft:3 }}>{unit}</span></span>;
+  return <span style={{ color, fontFamily:"'Space Mono',monospace", fontWeight:700, fontSize:size }}>{d.toFixed(dec)}<span style={{ fontSize:"0.72em", opacity:0.6, marginLeft:3 }}>{unit}</span></span>;
 };
 
 const Donut = ({ data, size=130 }) => {
@@ -280,23 +229,20 @@ const Spark = ({ data, field, color, w=220, h=44, selIdx }) => {
   const sy = selIdx!=null?h-((vals[selIdx]-mn)/rng)*(h-8)-4:null;
   return (
     <svg width={w} height={h} style={{overflow:"visible"}}>
-      {/* shade EIA-verified vs estimated */}
       {data.map((d,i)=>{
         if(i===data.length-1) return null;
         const x1=(i/(data.length-1))*w, x2=((i+1)/(data.length-1))*w;
         return <rect key={i} x={x1} y={0} width={x2-x1} height={h} fill={d.src==="EIA"?"rgba(0,201,167,0.04)":"rgba(240,165,0,0.04)"}/>;
       })}
       <polyline points={pts} fill="none" stroke={color} strokeWidth={1.5} opacity={0.6}/>
-      {/* EIA/EST boundary line */}
       {(()=>{ const bi=data.findIndex(d=>d.src==="EST"); if(bi<0)return null; const bx=(bi/(data.length-1))*w; return <line key="b" x1={bx} y1={0} x2={bx} y2={h} stroke="#f0a500" strokeWidth={1} strokeDasharray="3,2" opacity={0.5}/>; })()}
       {sx!=null&&<><line x1={sx} y1={0} x2={sx} y2={h} stroke={color} strokeWidth={1} strokeDasharray="3,2" opacity={0.5}/><circle cx={sx} cy={sy} r={4} fill={color}/></>}
     </svg>
   );
 };
 
-// Brent mini price chart from EIA history
 const BrentSpark = ({ history, w=200, h=44 }) => {
-  if (!history.length) return <div style={{ width:w, height:h, display:"flex", alignItems:"center", justifyContent:"center", color:"#556677", fontSize:"0.72rem" }}>Loading chart…</div>;
+  if (!history.length) return <div style={{ width:w, height:h, display:"flex", alignItems:"center", justifyContent:"center", color:"#556677", fontSize:"0.75rem" }}>Loading chart…</div>;
   const vals = history.map(d=>d.price);
   const mn=Math.min(...vals), mx=Math.max(...vals), rng=mx-mn||1;
   const pts = vals.map((v,i)=>`${(i/(vals.length-1))*w},${h-((v-mn)/rng)*(h-8)-4}`).join(" ");
@@ -309,6 +255,10 @@ const BrentSpark = ({ history, w=200, h=44 }) => {
 };
 
 // ─── TIMELINE ─────────────────────────────────────────────────────────────────
+// FIX: The event note box uses a fixed height with opacity toggling instead of
+// visibility, preventing layout shift when notes appear/disappear.
+const NOTE_BOX_HEIGHT = "3.6rem"; // constant reserved space
+
 const Timeline = ({ months, idx, onChange }) => {
   const sel = months[idx];
   const era = ERA[sel.era];
@@ -330,20 +280,10 @@ const Timeline = ({ months, idx, onChange }) => {
             {sel.id==="2026-03"&&<span style={{ padding:"3px 9px", borderRadius:20, fontSize:"0.68rem", fontFamily:"'Space Mono',monospace", background:"rgba(0,201,167,0.12)", border:"1px solid #00c9a7", color:"#00c9a7" }}>● TODAY</span>}
           </div>
         </div>
-        <div style={{ display:"flex", gap:4, flexWrap:"wrap", justifyContent:"flex-end" }}>
-          {[
-            { l:"Jan '23", id:"2023-01" },
-            { l:"Oct '23", id:"2023-10" },
-            { l:"Jan '24", id:"2024-01" },
-            { l:"Jan '25", id:"2025-01" },
-            { l:"Today",   id:null },
-          ].map(b => {
-            const i = b.id ? months.findIndex(m => m.id === b.id) : months.length - 1;
-            if (i < 0) return null;
-            return (
-              <button key={b.l} onClick={()=>onChange(i)} style={{ padding:"5px 11px", borderRadius:5, background:idx===i?"rgba(0,201,167,0.1)":"rgba(255,255,255,0.03)", border:`1px solid ${idx===i?era.color:"rgba(255,255,255,0.07)"}`, color:idx===i?era.color:"#6677aa", cursor:"pointer", fontSize:"0.7rem", fontFamily:"'Space Mono',monospace" }}>{b.l}</button>
-            );
-          })}
+        <div style={{ display:"flex", gap:5, flexWrap:"wrap", justifyContent:"flex-end" }}>
+          {[{l:"Jan '23",i:0},{l:"Oct '23",i:9},{l:"Jan '24",i:12},{l:"Jan '25",i:24},{l:"Today",i:months.length-1}].map(b=>(
+            <button key={b.l} onClick={()=>onChange(b.i)} style={{ padding:"5px 11px", borderRadius:5, background:idx===b.i?"rgba(0,201,167,0.1)":"rgba(255,255,255,0.03)", border:`1px solid ${idx===b.i?era.color:"rgba(255,255,255,0.07)"}`, color:idx===b.i?era.color:"#8899bb", cursor:"pointer", fontSize:"0.7rem", fontFamily:"'Space Mono',monospace" }}>{b.l}</button>
+          ))}
         </div>
       </div>
 
@@ -353,25 +293,46 @@ const Timeline = ({ months, idx, onChange }) => {
       </div>
 
       {/* Slider */}
-      <div style={{ position:"relative", paddingBottom:20, marginBottom:4 }}>
+      <div style={{ position:"relative", paddingBottom:22, marginBottom:4 }}>
         <input type="range" min={0} max={months.length-1} value={idx} onChange={e=>onChange(+e.target.value)} style={{ width:"100%", cursor:"pointer", accentColor:era.color }}/>
         {yearPositions.map(({y,pct})=>(
           <div key={y} style={{ position:"absolute", bottom:0, left:`${pct}%`, transform:"translateX(-50%)", textAlign:"center" }}>
             <div style={{ width:1, height:4, background:"rgba(255,255,255,0.1)", margin:"0 auto 2px" }}/>
-            <div style={{ fontSize:"0.65rem", color:"#556677", fontFamily:"'Space Mono',monospace" }}>{y}</div>
+            <div style={{ fontSize:"0.65rem", color:"#778899", fontFamily:"'Space Mono',monospace" }}>{y}</div>
           </div>
         ))}
         <div style={{ position:"absolute", bottom:0, right:0, textAlign:"center" }}>
           <div style={{ width:1, height:4, background:"#00c9a7", margin:"0 auto 2px" }}/>
           <div style={{ fontSize:"0.62rem", color:"#00c9a7", fontFamily:"'Space Mono',monospace" }}>NOW</div>
         </div>
-        {/* EIA/estimated boundary */}
         {(()=>{ const bi=months.findIndex(d=>d.src==="EST"); if(bi<0)return null; const pct=(bi/(months.length-1))*100; return <div style={{ position:"absolute", top:0, left:`${pct}%`, width:1, height:12, background:"#f0a500", opacity:0.5 }}/>; })()}
       </div>
 
-      {/* Event note — fixed height box; opacity fades in/out so height never changes → no layout shift */}
-      <div style={{ height:"3.6rem", overflow:"hidden", padding:"7px 10px", background:era.bg, border:`1px solid ${era.border}`, borderRadius:5, marginBottom:10, boxSizing:"border-box", opacity:sel.note?1:0, transition:"opacity 0.2s ease", pointerEvents:sel.note?"auto":"none" }}>
-        <span style={{ fontSize:"0.75rem", color:era.color, fontFamily:"'Space Mono',monospace", lineHeight:1.45 }}>⚡ {sel.note||""}</span>
+      {/*
+        ── LAYOUT SHIFT FIX ──────────────────────────────────────────────────
+        Previously used `visibility: hidden` which hides text but lets the box
+        grow/shrink with content length, causing layout shift on every slide.
+
+        Now: fixed height container (NOTE_BOX_HEIGHT) with overflow:hidden.
+        Content is always rendered, opacity transitions between 0 and 1.
+        Height never changes → zero layout shift regardless of note length.
+        ────────────────────────────────────────────────────────────────────── */}
+      <div style={{
+        height: NOTE_BOX_HEIGHT,
+        overflow: "hidden",
+        padding:"7px 12px",
+        background: era.bg,
+        border: `1px solid ${era.border}`,
+        borderRadius: 6,
+        marginBottom: 12,
+        boxSizing: "border-box",
+        opacity: sel.note ? 1 : 0,
+        transition: "opacity 0.2s ease",
+        pointerEvents: sel.note ? "auto" : "none",
+      }}>
+        <span style={{ fontSize:"0.75rem", color:era.color, fontFamily:"'Space Mono',monospace", lineHeight:1.45 }}>
+          ⚡ {sel.note || ""}
+        </span>
       </div>
 
       {/* Sparklines */}
@@ -384,11 +345,11 @@ const Timeline = ({ months, idx, onChange }) => {
           const base_v=MONTHS[0][s.field], curr=months[idx][s.field];
           const delta=((curr-base_v)/base_v*100).toFixed(1);
           return (
-            <div key={i} style={{ background:"rgba(0,0,0,0.15)", borderRadius:7, padding:"8px 10px" }}>
-              <div style={{ color:"#556677", fontSize:"0.62rem", letterSpacing:2, fontFamily:"'Space Mono',monospace", marginBottom:3 }}>{s.label}</div>
+            <div key={i} style={{ background:"rgba(0,0,0,0.15)", borderRadius:7, padding:"9px 11px" }}>
+              <div style={{ color:"#778899", fontSize:"0.62rem", letterSpacing:2, fontFamily:"'Space Mono',monospace", marginBottom:4 }}>{s.label}</div>
               <Spark data={months} field={s.field} color={s.color} w={190} h={36} selIdx={idx}/>
-              <div style={{ marginTop:3, display:"flex", alignItems:"center", gap:7 }}>
-                <span style={{ fontFamily:"'Space Mono',monospace", fontSize:"0.9rem", color:s.color }}>{months[idx][s.field].toFixed(s.dec)}<span style={{ fontSize:"0.6em", opacity:0.6, marginLeft:2 }}>{s.unit}</span></span>
+              <div style={{ marginTop:4, display:"flex", alignItems:"center", gap:8 }}>
+                <span style={{ fontFamily:"'Space Mono',monospace", fontSize:"0.9rem", color:s.color }}>{months[idx][s.field].toFixed(s.dec)}<span style={{ fontSize:"0.65em", opacity:0.6, marginLeft:2 }}>{s.unit}</span></span>
                 {idx>0&&<span style={{ fontSize:"0.65rem", color:parseFloat(delta)>=0?"#00c9a7":"#e84b3a" }}>{parseFloat(delta)>=0?"▲":"▼"}{Math.abs(delta)}% vs Jan'23</span>}
               </div>
             </div>
@@ -397,13 +358,13 @@ const Timeline = ({ months, idx, onChange }) => {
       </div>
 
       {/* Legend */}
-      <div style={{ display:"flex", gap:14, marginTop:10, flexWrap:"wrap", alignItems:"center" }}>
+      <div style={{ display:"flex", gap:14, marginTop:11, flexWrap:"wrap", alignItems:"center" }}>
         {Object.entries(ERA).map(([k,v])=>(
-          <div key={k} style={{ display:"flex", alignItems:"center", gap:4, fontSize:"0.67rem", color:"#778899", fontFamily:"'Space Mono',monospace" }}>
+          <div key={k} style={{ display:"flex", alignItems:"center", gap:5, fontSize:"0.67rem", color:"#8899aa", fontFamily:"'Space Mono',monospace" }}>
             <div style={{ width:8, height:8, borderRadius:2, background:v.color, opacity:0.75 }}/>{v.label}
           </div>
         ))}
-        <div style={{ marginLeft:"auto", display:"flex", gap:10 }}>
+        <div style={{ marginLeft:"auto", display:"flex", gap:12 }}>
           <span style={{ fontSize:"0.65rem", color:"#00c9a7", fontFamily:"'Space Mono',monospace" }}>▓ EIA Verified</span>
           <span style={{ fontSize:"0.65rem", color:"#f0a500", fontFamily:"'Space Mono',monospace" }}>░ Modeled Est.</span>
         </div>
@@ -419,7 +380,7 @@ const LiveBrentPanel = ({ brent, history }) => {
     <div style={{ background:"rgba(10,15,26,0.96)", border:`1px solid ${up?"rgba(0,201,167,0.3)":"rgba(232,75,58,0.3)"}`, borderRadius:10, padding:"14px 18px", marginBottom:16 }}>
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start" }}>
         <div>
-          <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:4 }}>
+          <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:5 }}>
             {brent.loading
               ? <div style={{ width:8, height:8, borderRadius:"50%", background:"#778899", animation:"blink 1s infinite" }}/>
               : <div style={{ width:8, height:8, borderRadius:"50%", background:"#00c9a7", boxShadow:"0 0 6px #00c9a7", animation:"blink 2s infinite" }}/>
@@ -428,7 +389,7 @@ const LiveBrentPanel = ({ brent, history }) => {
               {brent.loading ? "FETCHING LIVE DATA…" : `LIVE · ${brent.source}`}
             </span>
           </div>
-          <div style={{ fontSize:"0.72rem", color:"#556677", fontFamily:"'Space Mono',monospace", marginBottom:6 }}>BRENT CRUDE SPOT PRICE (USD/bbl)</div>
+          <div style={{ fontSize:"0.72rem", color:"#778899", fontFamily:"'Space Mono',monospace", marginBottom:6 }}>BRENT CRUDE SPOT PRICE (USD/bbl)</div>
           {brent.loading
             ? <div style={{ color:"#778899", fontFamily:"'Space Mono',monospace", fontSize:"1.8rem" }}>—</div>
             : (
@@ -442,17 +403,16 @@ const LiveBrentPanel = ({ brent, history }) => {
               </div>
             )
           }
-          <div style={{ fontSize:"0.65rem", color:"#445566", fontFamily:"'Space Mono',monospace", marginTop:3 }}>
-            {brent.error
-              ? "⚠ Live price unavailable — add VITE_EIA_API_KEY to .env for reliable data"
-              : brent.ts ? `As of ${brent.ts} · Updates every 5 min` : ""
-            }
+          {brent.error&&<div style={{ fontSize:"0.72rem", color:"#f0a500", fontFamily:"'Space Mono',monospace", marginTop:4 }}>⚠ {brent.error}</div>}
+          <div style={{ fontSize:"0.67rem", color:"#556677", fontFamily:"'Space Mono',monospace", marginTop:3 }}>
+            {brent.ts ? `As of ${brent.ts}` : ""}
+            {" · Updates every 5 min · Set VITE_EIA_API_KEY for official EIA data"}
           </div>
         </div>
         <div>
-          <div style={{ fontSize:"0.65rem", color:"#556677", fontFamily:"'Space Mono',monospace", marginBottom:4 }}>52-WEEK BRENT (EIA weekly)</div>
+          <div style={{ fontSize:"0.65rem", color:"#778899", fontFamily:"'Space Mono',monospace", marginBottom:4 }}>52-WEEK BRENT (EIA weekly)</div>
           <BrentSpark history={history} w={200} h={44}/>
-          {!history.length&&<div style={{ fontSize:"0.65rem", color:"#445566", fontFamily:"'Space Mono',monospace", marginTop:2 }}>Add VITE_EIA_API_KEY to .env for chart</div>}
+          {!history.length&&<div style={{ fontSize:"0.67rem", color:"#556677", fontFamily:"'Space Mono',monospace", marginTop:2 }}>Add VITE_EIA_API_KEY to .env for chart</div>}
         </div>
       </div>
     </div>
@@ -467,8 +427,8 @@ const DataQualityBanner = ({ idx }) => {
   const color = isLive ? "#ff79c6" : isVerified ? "#00c9a7" : "#f0a500";
   const bg = isLive ? "rgba(255,0,255,0.05)" : isVerified ? "rgba(0,201,167,0.05)" : "rgba(240,165,0,0.05)";
   return (
-    <div style={{ padding:"8px 14px", borderRadius:7, marginBottom:12, display:"flex", alignItems:"center", gap:10, background:bg, border:`1px solid ${color}44`, fontSize:"0.75rem", color:"#99aabb" }}>
-      <span style={{ color, fontFamily:"'Space Mono',monospace", fontWeight:700 }}>{isLive?"📡 AIS TRACKED":isVerified?"✓ VERIFIED":"~ ESTIMATED"}</span>
+    <div style={{ padding:"9px 14px", borderRadius:7, marginBottom:12, display:"flex", alignItems:"center", gap:10, background:bg, border:`1px solid ${color}44`, fontSize:"0.75rem", color:"#99aabb" }}>
+      <span style={{ color, fontFamily:"'Space Mono',monospace", fontWeight:700, whiteSpace:"nowrap" }}>{isLive?"📡 AIS TRACKED":isVerified?"✓ VERIFIED":"~ ESTIMATED"}</span>
       {isLive
         ? <span>Tracked via <strong style={{color:"#ff79c6"}}>AIS transponder data</strong> (CSIS/Starboard Maritime Intelligence, MarineTraffic). The Strait is <strong style={{color:"#ff00ff"}}>effectively closed</strong> following US/Israel strikes on Iran (Feb 28). Figures reflect real observed collapse, not estimates. Oil flow approximate.</span>
         : isVerified
@@ -502,20 +462,20 @@ export default function App() {
       {/* HEADER */}
       <div style={{ background:"linear-gradient(180deg,#0d1626,rgba(13,22,38,0.97))", borderBottom:"1px solid rgba(0,201,167,0.1)", padding:"14px 24px", display:"flex", justifyContent:"space-between", alignItems:"center", position:"relative", zIndex:10 }}>
         <div>
-          <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:2 }}>
+          <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:3 }}>
             <div style={{ width:7, height:7, borderRadius:"50%", background:"#00c9a7", boxShadow:"0 0 7px #00c9a7", animation:"blink 2s infinite" }}/>
             <span style={{ color:"#00c9a7", fontFamily:"'Space Mono',monospace", fontSize:"0.67rem", letterSpacing:4, textTransform:"uppercase" }}>Maritime Intelligence · Mar 12, 2026</span>
           </div>
-          <h1 style={{ margin:0, fontSize:"1.3rem", fontWeight:700, color:"#fff", letterSpacing:-0.4 }}>STRAIT OF HORMUZ — TRAFFIC INTELLIGENCE</h1>
-          <div style={{ color:"#6677aa", fontSize:"0.72rem", marginTop:2, fontFamily:"'Space Mono',monospace" }}>
+          <h1 style={{ margin:0, fontSize:"1.4rem", fontWeight:700, color:"#fff", letterSpacing:-0.4 }}>STRAIT OF HORMUZ — TRAFFIC INTELLIGENCE</h1>
+          <div style={{ color:"#8899aa", fontSize:"0.75rem", marginTop:3, fontFamily:"'Space Mono',monospace" }}>
             EIA VERIFIED HISTORY · LIVE BRENT · AIS + LLOYD'S BASELINES · JAN 2023 → TODAY
           </div>
         </div>
         <div style={{ textAlign:"right" }}>
-          <div style={{ padding:"5px 12px", background:era.bg, border:`1px solid ${era.border}`, borderRadius:20, fontSize:"0.72rem", fontFamily:"'Space Mono',monospace", color:era.color, marginBottom:4 }}>
+          <div style={{ padding:"6px 13px", background:era.bg, border:`1px solid ${era.border}`, borderRadius:20, fontSize:"0.72rem", fontFamily:"'Space Mono',monospace", color:era.color, marginBottom:5 }}>
             {sel.label} · {era.label}
           </div>
-          <div style={{ fontSize:"0.65rem", color:SRC_COLOR[sel.src], fontFamily:"'Space Mono',monospace" }}>{SRC_LABEL[sel.src]}</div>
+          <div style={{ fontSize:"0.67rem", color:SRC_COLOR[sel.src], fontFamily:"'Space Mono',monospace" }}>{SRC_LABEL[sel.src]}</div>
         </div>
       </div>
 
@@ -530,14 +490,14 @@ export default function App() {
         ].map((k,i)=>{
           const d = k.base_v!=null ? ((parseFloat(k.val)-parseFloat(k.base_v))/parseFloat(k.base_v)*100).toFixed(1) : null;
           return (
-            <div key={i} style={{ padding:"12px 16px", borderRight:i<4?"1px solid rgba(0,201,167,0.05)":"none", background:"rgba(10,15,26,0.85)" }}>
-              <div style={{ display:"flex", alignItems:"center", gap:5, marginBottom:3 }}>
-                <div style={{ color:"#556677", fontSize:"0.62rem", letterSpacing:3, textTransform:"uppercase", fontFamily:"'Space Mono',monospace" }}>{k.label}</div>
-                {k.live&&<div style={{ width:5, height:5, borderRadius:"50%", background:brent.loading?"#778899":"#00c9a7", animation:"blink 2s infinite" }}/>}
+            <div key={i} style={{ padding:"13px 16px", borderRight:i<4?"1px solid rgba(0,201,167,0.05)":"none", background:"rgba(10,15,26,0.85)" }}>
+              <div style={{ display:"flex", alignItems:"center", gap:5, marginBottom:4 }}>
+                <div style={{ color:"#778899", fontSize:"0.62rem", letterSpacing:3, textTransform:"uppercase", fontFamily:"'Space Mono',monospace" }}>{k.label}</div>
+                {k.live&&<div style={{ width:6, height:6, borderRadius:"50%", background:brent.loading?"#778899":"#00c9a7", animation:"blink 2s infinite" }}/>}
               </div>
               <Ticker key={`${k.val}-${i}`} value={k.val} unit={k.unit} dec={k.dec} color={k.color}/>
-              {d!=null&&idx>0&&<div style={{ fontSize:"0.65rem", color:parseFloat(d)>=0?"#00c9a7":"#e84b3a", marginTop:2, fontFamily:"'Space Mono',monospace" }}>{parseFloat(d)>=0?"▲":"▼"}{Math.abs(d)}%</div>}
-              {k.live&&brent.change!=null&&<div style={{ fontSize:"0.65rem", color:brent.change>=0?"#00c9a7":"#e84b3a", marginTop:2, fontFamily:"'Space Mono',monospace" }}>{brent.change>=0?"▲":"▼"}{Math.abs(brent.change).toFixed(2)} today</div>}
+              {d!=null&&idx>0&&<div style={{ fontSize:"0.65rem", color:parseFloat(d)>=0?"#00c9a7":"#e84b3a", marginTop:3, fontFamily:"'Space Mono',monospace" }}>{parseFloat(d)>=0?"▲":"▼"}{Math.abs(d)}%</div>}
+              {k.live&&brent.change!=null&&<div style={{ fontSize:"0.65rem", color:brent.change>=0?"#00c9a7":"#e84b3a", marginTop:3, fontFamily:"'Space Mono',monospace" }}>{brent.change>=0?"▲":"▼"}{Math.abs(brent.change).toFixed(2)} today</div>}
             </div>
           );
         })}
@@ -546,14 +506,13 @@ export default function App() {
       {/* TABS */}
       <div style={{ display:"flex", borderBottom:"1px solid rgba(255,255,255,0.04)", padding:"0 24px", background:"rgba(10,15,26,0.9)", position:"relative", zIndex:10 }}>
         {["overview","fleet","cargo","origins & destinations"].map(t=>(
-          <button key={t} onClick={()=>setTab(t)} style={{ padding:"10px 18px", background:"transparent", border:"none", borderBottom:tab===t?`2px solid ${era.color}`:"2px solid transparent", color:tab===t?era.color:"#5566aa", cursor:"pointer", fontSize:"0.75rem", letterSpacing:2, textTransform:"uppercase", fontFamily:"'Space Mono',monospace", transition:"all 0.2s" }}>{t}</button>
+          <button key={t} onClick={()=>setTab(t)} style={{ padding:"11px 18px", background:"transparent", border:"none", borderBottom:tab===t?`2px solid ${era.color}`:"2px solid transparent", color:tab===t?era.color:"#6677aa", cursor:"pointer", fontSize:"0.75rem", letterSpacing:2, textTransform:"uppercase", fontFamily:"'Space Mono',monospace", transition:"all 0.2s" }}>{t}</button>
         ))}
       </div>
 
       {/* PAGE */}
       <div style={{ padding:"18px 24px", position:"relative", zIndex:10 }}>
 
-        {/* Live Brent + Data Quality */}
         <LiveBrentPanel brent={brent} history={history}/>
         <DataQualityBanner idx={idx}/>
         <Timeline months={MONTHS} idx={idx} onChange={setIdx}/>
@@ -589,12 +548,12 @@ export default function App() {
                   { l:"Status",         v:era.label,            s:sel.note?sel.note.slice(0,42)+"…":"No notable incident this period", c:era.color, src:sel.src },
                 ].map((s,i)=>(
                   <div key={i}>
-                    <div style={{ display:"flex", alignItems:"center", gap:4, marginBottom:2 }}>
-                      <div style={{ color:"#556677", fontSize:"0.65rem", letterSpacing:2, fontFamily:"'Space Mono',monospace", textTransform:"uppercase" }}>{s.l}</div>
-                      <div style={{ fontSize:"0.60rem", color:SRC_COLOR[s.src]||"#778899", fontFamily:"'Space Mono',monospace", opacity:0.8 }}>[{s.src}]</div>
+                    <div style={{ display:"flex", alignItems:"center", gap:5, marginBottom:3 }}>
+                      <div style={{ color:"#778899", fontSize:"0.65rem", letterSpacing:2, fontFamily:"'Space Mono',monospace", textTransform:"uppercase" }}>{s.l}</div>
+                      <div style={{ fontSize:"0.58rem", color:SRC_COLOR[s.src]||"#778899", fontFamily:"'Space Mono',monospace", opacity:0.8 }}>[{s.src}]</div>
                     </div>
-                    <div style={{ color:s.c||era.color, fontSize:"0.9rem", fontWeight:700, margin:"1px 0" }}>{s.v}</div>
-                    <div style={{ color:"#778899", fontSize:"0.62rem", lineHeight:1.3 }}>{s.s}</div>
+                    <div style={{ color:s.c||era.color, fontSize:"0.95rem", fontWeight:700, margin:"2px 0" }}>{s.v}</div>
+                    <div style={{ color:"#8899aa", fontSize:"0.72rem", lineHeight:1.4 }}>{s.s}</div>
                   </div>
                 ))}
               </div>
@@ -602,14 +561,14 @@ export default function App() {
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}>
               <div style={{ background:"rgba(13,22,38,0.8)", border:"1px solid rgba(255,255,255,0.04)", borderRadius:11, padding:"16px 18px" }}>
                 <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:13 }}>
-                  <div style={{ color:"#556677", fontSize:"0.65rem", letterSpacing:3, fontFamily:"'Space Mono',monospace" }}>CRUDE EXPORT SHARE BY PRODUCER</div>
+                  <div style={{ color:"#778899", fontSize:"0.65rem", letterSpacing:3, fontFamily:"'Space Mono',monospace" }}>CRUDE EXPORT SHARE BY PRODUCER</div>
                   <span style={{ fontSize:"0.62rem", color:"#00c9a7", fontFamily:"'Space Mono',monospace" }}>✓ EIA 2024</span>
                 </div>
                 {PRODUCERS.map((p,i)=>(
-                  <div key={i} style={{ marginBottom:10 }}>
-                    <div style={{ display:"flex", justifyContent:"space-between", marginBottom:3 }}>
-                      <span style={{ fontSize:"0.76rem", fontWeight:600 }}>{p.country}</span>
-                      <span style={{ fontFamily:"'Space Mono',monospace", fontSize:"0.7rem", color:p.color }}>{p.share}% · {p.mbpd} Mb/d</span>
+                  <div key={i} style={{ marginBottom:11 }}>
+                    <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4 }}>
+                      <span style={{ fontSize:"0.82rem", fontWeight:600 }}>{p.country}</span>
+                      <span style={{ fontFamily:"'Space Mono',monospace", fontSize:"0.75rem", color:p.color }}>{p.share}% · {p.mbpd} Mb/d</span>
                     </div>
                     <Bar value={p.share} max={42} color={p.color} h={5}/>
                   </div>
@@ -617,17 +576,17 @@ export default function App() {
               </div>
               <div style={{ background:"rgba(13,22,38,0.8)", border:"1px solid rgba(255,255,255,0.04)", borderRadius:11, padding:"16px 18px" }}>
                 <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:13 }}>
-                  <div style={{ color:"#556677", fontSize:"0.65rem", letterSpacing:3, fontFamily:"'Space Mono',monospace" }}>CARGO DESTINATION BREAKDOWN</div>
+                  <div style={{ color:"#778899", fontSize:"0.65rem", letterSpacing:3, fontFamily:"'Space Mono',monospace" }}>CARGO DESTINATION BREAKDOWN</div>
                   <span style={{ fontSize:"0.62rem", color:"#00c9a7", fontFamily:"'Space Mono',monospace" }}>✓ EIA 2024 / IEA</span>
                 </div>
                 <div style={{ display:"flex", alignItems:"center", gap:18 }}>
                   <Donut data={DESTINATIONS} size={120}/>
                   <div style={{ flex:1 }}>
                     {DESTINATIONS.map((d,i)=>(
-                      <div key={i} style={{ display:"flex", alignItems:"center", gap:7, marginBottom:6 }}>
-                        <div style={{ width:6, height:6, borderRadius:"50%", background:d.color, flexShrink:0 }}/>
-                        <span style={{ fontSize:"0.7rem", flex:1 }}>{d.icon} {d.region}</span>
-                        <span style={{ fontFamily:"'Space Mono',monospace", fontSize:"0.66rem", color:d.color, minWidth:28, textAlign:"right" }}>{d.share}%</span>
+                      <div key={i} style={{ display:"flex", alignItems:"center", gap:7, marginBottom:7 }}>
+                        <div style={{ width:7, height:7, borderRadius:"50%", background:d.color, flexShrink:0 }}/>
+                        <span style={{ fontSize:"0.78rem", flex:1 }}>{d.icon} {d.region}</span>
+                        <span style={{ fontFamily:"'Space Mono',monospace", fontSize:"0.72rem", color:d.color, minWidth:30, textAlign:"right" }}>{d.share}%</span>
                         <Bar value={d.share} max={42} color={d.color} h={4}/>
                       </div>
                     ))}
@@ -644,26 +603,26 @@ export default function App() {
             <div style={{ display:"grid", gridTemplateColumns:"3fr 2fr", gap:14, marginBottom:14 }}>
               <div style={{ background:"rgba(13,22,38,0.8)", border:"1px solid rgba(255,255,255,0.04)", borderRadius:11, padding:"16px 18px" }}>
                 <div style={{ display:"flex", justifyContent:"space-between", marginBottom:13 }}>
-                  <div style={{ color:"#556677", fontSize:"0.65rem", letterSpacing:3, fontFamily:"'Space Mono',monospace" }}>VESSEL TYPE COMPOSITION (SCALED TO PERIOD)</div>
+                  <div style={{ color:"#778899", fontSize:"0.65rem", letterSpacing:3, fontFamily:"'Space Mono',monospace" }}>VESSEL TYPE COMPOSITION (SCALED TO PERIOD)</div>
                   <span style={{ fontSize:"0.62rem", color:"#f0a500", fontFamily:"'Space Mono',monospace" }}>~ Lloyd's/AIS baseline</span>
                 </div>
                 {VESSEL_TYPES.map((v,i)=>(
-                  <div key={i} style={{ display:"grid", gridTemplateColumns:"22px 180px 48px 70px 1fr 48px", alignItems:"center", gap:8, padding:"7px 0", borderBottom:"1px solid rgba(255,255,255,0.03)" }}>
-                    <span style={{ fontSize:"0.85rem" }}>{v.icon}</span>
+                  <div key={i} style={{ display:"grid", gridTemplateColumns:"22px 180px 50px 72px 1fr 50px", alignItems:"center", gap:8, padding:"8px 0", borderBottom:"1px solid rgba(255,255,255,0.03)" }}>
+                    <span style={{ fontSize:"0.9rem" }}>{v.icon}</span>
                     <div>
-                      <div style={{ fontSize:"0.7rem", fontWeight:600 }}>{v.type}</div>
-                      <div style={{ fontSize:"0.70rem", color:"#556677", marginTop:1 }}>{v.sizeM}m · {(v.avgDwt/1000).toFixed(0)}k DWT</div>
+                      <div style={{ fontSize:"0.76rem", fontWeight:600 }}>{v.type}</div>
+                      <div style={{ fontSize:"0.65rem", color:"#778899", marginTop:1 }}>{v.sizeM}m · {(v.avgDwt/1000).toFixed(0)}k DWT</div>
                     </div>
-                    <span style={{ fontFamily:"'Space Mono',monospace", fontSize:"0.68rem", color:v.color, textAlign:"right" }}>{Math.round(v.count*ratio)}</span>
-                    <span style={{ fontSize:"0.70rem", color:"#778899", textAlign:"center" }}>{v.direction}</span>
+                    <span style={{ fontFamily:"'Space Mono',monospace", fontSize:"0.75rem", color:v.color, textAlign:"right" }}>{Math.round(v.count*ratio)}</span>
+                    <span style={{ fontSize:"0.65rem", color:"#8899aa", textAlign:"center" }}>{v.direction}</span>
                     <Bar value={v.pct} max={30} color={v.color} h={4}/>
-                    <span style={{ fontFamily:"'Space Mono',monospace", fontSize:"0.62rem", color:"#778899", textAlign:"right" }}>{v.pct}%</span>
+                    <span style={{ fontFamily:"'Space Mono',monospace", fontSize:"0.68rem", color:"#778899", textAlign:"right" }}>{v.pct}%</span>
                   </div>
                 ))}
               </div>
               <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
                 <div style={{ background:"rgba(13,22,38,0.8)", border:"1px solid rgba(255,255,255,0.04)", borderRadius:11, padding:"16px 18px", flex:1 }}>
-                  <div style={{ color:"#556677", fontSize:"0.65rem", letterSpacing:3, fontFamily:"'Space Mono',monospace", marginBottom:12 }}>TANKER SIZE CLASSES</div>
+                  <div style={{ color:"#778899", fontSize:"0.65rem", letterSpacing:3, fontFamily:"'Space Mono',monospace", marginBottom:13 }}>TANKER SIZE CLASSES</div>
                   {[
                     { name:"ULCC",      dwt:">320k",    len:"380m+",    note:"Rare" },
                     { name:"VLCC",      dwt:"200–320k", len:"300–330m", note:"Primary crude" },
@@ -673,29 +632,29 @@ export default function App() {
                     { name:"MR Tanker", dwt:"25–55k",   len:"180m",     note:"Refined" },
                     { name:"Handysize", dwt:"<25k",     len:"120–170m", note:"Coastal" },
                   ].map((s,i)=>(
-                    <div key={i} style={{ display:"flex", justifyContent:"space-between", padding:"5px 0", borderBottom:"1px solid rgba(255,255,255,0.03)", fontSize:"0.68rem" }}>
-                      <span style={{ color:era.color, fontFamily:"'Space Mono',monospace", fontWeight:700, width:68 }}>{s.name}</span>
+                    <div key={i} style={{ display:"flex", justifyContent:"space-between", padding:"6px 0", borderBottom:"1px solid rgba(255,255,255,0.03)", fontSize:"0.74rem" }}>
+                      <span style={{ color:era.color, fontFamily:"'Space Mono',monospace", fontWeight:700, width:72 }}>{s.name}</span>
                       <span style={{ color:"#aabbcc" }}>{s.dwt}</span>
-                      <span style={{ color:"#778899" }}>{s.len}</span>
-                      <span style={{ color:"#556677", fontSize:"0.70rem" }}>{s.note}</span>
+                      <span style={{ color:"#8899aa" }}>{s.len}</span>
+                      <span style={{ color:"#667788", fontSize:"0.65rem" }}>{s.note}</span>
                     </div>
                   ))}
                 </div>
               </div>
             </div>
             <div style={{ background:"rgba(13,22,38,0.8)", border:"1px solid rgba(255,255,255,0.04)", borderRadius:11, padding:"16px 18px" }}>
-              <div style={{ display:"flex", justifyContent:"space-between", marginBottom:12 }}>
-                <div style={{ color:"#556677", fontSize:"0.65rem", letterSpacing:3, fontFamily:"'Space Mono',monospace" }}>FLAG STATE REGISTRY (AIS / LLOYD'S 2023–2024 BASELINE)</div>
+              <div style={{ display:"flex", justifyContent:"space-between", marginBottom:13 }}>
+                <div style={{ color:"#778899", fontSize:"0.65rem", letterSpacing:3, fontFamily:"'Space Mono',monospace" }}>FLAG STATE REGISTRY (AIS / LLOYD'S 2023–2024 BASELINE)</div>
                 <span style={{ fontSize:"0.62rem", color:"#f0a500", fontFamily:"'Space Mono',monospace" }}>~ WorldwideAIS / Lloyd's List Intelligence</span>
               </div>
               <div style={{ display:"grid", gridTemplateColumns:"repeat(6,1fr)", gap:7 }}>
                 {FLAGS.map((f,i)=>(
                   <div key={i} onMouseEnter={()=>setHFlag(i)} onMouseLeave={()=>setHFlag(null)}
-                    style={{ padding:"8px 10px", background:hFlag===i?"rgba(0,201,167,0.05)":"rgba(255,255,255,0.02)", border:`1px solid ${hFlag===i?f.color:"rgba(255,255,255,0.04)"}`, borderRadius:7, cursor:"default", transition:"all 0.2s" }}>
-                    <div style={{ fontSize:"0.72rem", fontWeight:600, color:f.color, marginBottom:1 }}>{f.flag}</div>
-                    <div style={{ fontFamily:"'Space Mono',monospace", fontSize:"0.8rem", color:"#fff" }}>{f.vessels}</div>
-                    <div style={{ fontSize:"0.67rem", color:"#556677", marginTop:2 }}>{f.pct}% · {f.type}</div>
-                    <div style={{ marginTop:4 }}><Bar value={f.pct} max={16} color={f.color} h={3}/></div>
+                    style={{ padding:"9px 11px", background:hFlag===i?"rgba(0,201,167,0.05)":"rgba(255,255,255,0.02)", border:`1px solid ${hFlag===i?f.color:"rgba(255,255,255,0.04)"}`, borderRadius:7, cursor:"default", transition:"all 0.2s" }}>
+                    <div style={{ fontSize:"0.78rem", fontWeight:600, color:f.color, marginBottom:2 }}>{f.flag}</div>
+                    <div style={{ fontFamily:"'Space Mono',monospace", fontSize:"0.85rem", color:"#fff" }}>{f.vessels}</div>
+                    <div style={{ fontSize:"0.63rem", color:"#778899", marginTop:2 }}>{f.pct}% · {f.type}</div>
+                    <div style={{ marginTop:5 }}><Bar value={f.pct} max={16} color={f.color} h={3}/></div>
                   </div>
                 ))}
               </div>
@@ -708,11 +667,11 @@ export default function App() {
           <div>
             <div style={{ display:"grid", gridTemplateColumns:"repeat(2,1fr)", gap:11, marginBottom:14 }}>
               {CARGO.map((c,i)=>(
-                <div key={i} style={{ background:"rgba(13,22,38,0.8)", border:`1px solid ${c.color}18`, borderLeft:`3px solid ${c.color}`, borderRadius:9, padding:"13px 15px", display:"grid", gridTemplateColumns:"32px 1fr auto", gap:11, alignItems:"center" }}>
-                  <span style={{ fontSize:"1.2rem" }}>{c.icon}</span>
+                <div key={i} style={{ background:"rgba(13,22,38,0.8)", border:`1px solid ${c.color}18`, borderLeft:`3px solid ${c.color}`, borderRadius:9, padding:"13px 15px", display:"grid", gridTemplateColumns:"34px 1fr auto", gap:11, alignItems:"center" }}>
+                  <span style={{ fontSize:"1.3rem" }}>{c.icon}</span>
                   <div>
-                    <div style={{ fontWeight:700, fontSize:"0.8rem", marginBottom:2 }}>{c.name}</div>
-                    <div style={{ fontSize:"0.6rem", color:"#778899" }}>
+                    <div style={{ fontWeight:700, fontSize:"0.87rem", marginBottom:3 }}>{c.name}</div>
+                    <div style={{ fontSize:"0.68rem", color:"#8899aa" }}>
                       {c.dailyMbbl&&`${(c.dailyMbbl*ratio).toFixed(1)} Mb/d · `}
                       {c.dailyMt&&`${(c.dailyMt*ratio).toFixed(2)} Mt/d · `}
                       {c.dailyTEU&&`${Math.round(c.dailyTEU*ratio).toLocaleString()} TEU/d · `}
@@ -721,9 +680,9 @@ export default function App() {
                     <div style={{ marginTop:5 }}><Bar value={c.annualValueB*ratio} max={450} color={c.color} h={4}/></div>
                   </div>
                   <div style={{ textAlign:"right" }}>
-                    <div style={{ fontFamily:"'Space Mono',monospace", color:c.color, fontSize:"0.88rem", fontWeight:700 }}>${(c.annualValueB*ratio).toFixed(0)}B</div>
-                    <div style={{ fontSize:"0.67rem", color:"#556677", marginTop:1 }}>annual est.</div>
-                    {ratio<0.97&&<div style={{ fontSize:"0.67rem", color:"#e84b3a", marginTop:1 }}>↓{((1-ratio)*100).toFixed(0)}%</div>}
+                    <div style={{ fontFamily:"'Space Mono',monospace", color:c.color, fontSize:"0.95rem", fontWeight:700 }}>${(c.annualValueB*ratio).toFixed(0)}B</div>
+                    <div style={{ fontSize:"0.62rem", color:"#778899", marginTop:2 }}>annual est.</div>
+                    {ratio<0.97&&<div style={{ fontSize:"0.62rem", color:"#e84b3a", marginTop:2 }}>↓{((1-ratio)*100).toFixed(0)}%</div>}
                   </div>
                 </div>
               ))}
@@ -734,10 +693,10 @@ export default function App() {
                 { l:"GLOBAL OIL SUPPLY",   v:`~${(20*ratio).toFixed(0)}%`,       s:sel.src==="EIA"?"EIA verified":"Scaled from EIA baseline", c:"#e84b3a" },
                 { l:"GLOBAL LNG SUPPLY",   v:"~20%",                             s:"EIA 2024 — Qatar primary source", c:"#4ecdc4" },
               ].map((s,i)=>(
-                <div key={i} style={{ background:"rgba(13,22,38,0.8)", border:"1px solid rgba(255,255,255,0.04)", borderRadius:9, padding:"14px 18px", textAlign:"center" }}>
-                  <div style={{ color:"#556677", fontSize:"0.65rem", letterSpacing:3, fontFamily:"'Space Mono',monospace", marginBottom:7 }}>{s.l}</div>
-                  <div style={{ color:s.c, fontSize:"1.5rem", fontWeight:700, fontFamily:"'Space Mono',monospace" }}>{s.v}</div>
-                  <div style={{ color:"#778899", fontSize:"0.65rem", marginTop:4 }}>{s.s}</div>
+                <div key={i} style={{ background:"rgba(13,22,38,0.8)", border:"1px solid rgba(255,255,255,0.04)", borderRadius:9, padding:"15px 18px", textAlign:"center" }}>
+                  <div style={{ color:"#778899", fontSize:"0.65rem", letterSpacing:3, fontFamily:"'Space Mono',monospace", marginBottom:8 }}>{s.l}</div>
+                  <div style={{ color:s.c, fontSize:"1.6rem", fontWeight:700, fontFamily:"'Space Mono',monospace" }}>{s.v}</div>
+                  <div style={{ color:"#8899aa", fontSize:"0.72rem", marginTop:5 }}>{s.s}</div>
                 </div>
               ))}
             </div>
@@ -749,7 +708,7 @@ export default function App() {
           <div>
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}>
               <div style={{ background:"rgba(13,22,38,0.8)", border:"1px solid rgba(255,255,255,0.04)", borderRadius:11, padding:"16px 18px" }}>
-                <div style={{ color:"#556677", fontSize:"0.65rem", letterSpacing:3, fontFamily:"'Space Mono',monospace", marginBottom:13 }}>MAJOR LOADING TERMINALS</div>
+                <div style={{ color:"#778899", fontSize:"0.65rem", letterSpacing:3, fontFamily:"'Space Mono',monospace", marginBottom:13 }}>MAJOR LOADING TERMINALS</div>
                 {[
                   { port:"Ras Tanura (Saudi Arabia)",     type:"Crude Oil",       cap:"6–8 Mb/d",    c:"#00b894", src:"EIA" },
                   { port:"Ras Laffan (Qatar)",            type:"LNG / Condensate",cap:"80 MT/yr LNG", c:"#00c9a7", src:"EIA" },
@@ -759,22 +718,22 @@ export default function App() {
                   { port:"Shuaiba (Kuwait)",              type:"Crude/Products",  cap:"2–2.5 Mb/d",  c:"#f0a500", src:"EIA" },
                   { port:"Bahrain / Mina Salman",         type:"Products / LPG",  cap:"Mixed",       c:"#fd79a8", src:"Est." },
                 ].map((p,i)=>(
-                  <div key={i} style={{ padding:"7px 0", borderBottom:"1px solid rgba(255,255,255,0.03)" }}>
+                  <div key={i} style={{ padding:"8px 0", borderBottom:"1px solid rgba(255,255,255,0.03)" }}>
                     <div style={{ display:"flex", justifyContent:"space-between", marginBottom:2 }}>
-                      <span style={{ fontWeight:600, fontSize:"0.73rem", color:p.c }}>{p.port}</span>
-                      <div style={{ display:"flex", gap:6, alignItems:"center" }}>
-                        <span style={{ fontFamily:"'Space Mono',monospace", fontSize:"0.62rem", color:"#778899" }}>{p.cap}</span>
-                        <span style={{ fontSize:"0.62rem", color:SRC_COLOR[p.src]||"#778899", fontFamily:"'Space Mono',monospace" }}>[{p.src}]</span>
+                      <span style={{ fontWeight:600, fontSize:"0.8rem", color:p.c }}>{p.port}</span>
+                      <div style={{ display:"flex", gap:7, alignItems:"center" }}>
+                        <span style={{ fontFamily:"'Space Mono',monospace", fontSize:"0.7rem", color:"#8899aa" }}>{p.cap}</span>
+                        <span style={{ fontSize:"0.58rem", color:SRC_COLOR[p.src]||"#778899", fontFamily:"'Space Mono',monospace" }}>[{p.src}]</span>
                       </div>
                     </div>
-                    <div style={{ fontSize:"0.6rem", color:"#556677" }}>{p.type}</div>
+                    <div style={{ fontSize:"0.68rem", color:"#667788" }}>{p.type}</div>
                   </div>
                 ))}
               </div>
               <div style={{ background:"rgba(13,22,38,0.8)", border:"1px solid rgba(255,255,255,0.04)", borderRadius:11, padding:"16px 18px" }}>
                 <div style={{ display:"flex", justifyContent:"space-between", marginBottom:13 }}>
-                  <div style={{ color:"#556677", fontSize:"0.65rem", letterSpacing:3, fontFamily:"'Space Mono',monospace" }}>DESTINATION FLOWS (PERIOD-ADJUSTED)</div>
-                  <span style={{ fontSize:"0.62rem", color:"#00c9a7", fontFamily:"'Space Mono',monospace" }}>✓ EIA 2024</span>
+                  <div style={{ color:"#778899", fontSize:"0.65rem", letterSpacing:3, fontFamily:"'Space Mono',monospace" }}>DESTINATION FLOWS (PERIOD-ADJUSTED)</div>
+                  <span style={{ fontSize:"0.58rem", color:"#00c9a7", fontFamily:"'Space Mono',monospace" }}>✓ EIA 2024</span>
                 </div>
                 {[
                   { r:"China",       crude:`~${(7*ratio).toFixed(1)}`,   lng:"~25",  dep:"HIGH",     c:"#e84b3a", src:"EIA" },
@@ -784,23 +743,23 @@ export default function App() {
                   { r:"SE Asia",     crude:`~${(1.2*ratio).toFixed(1)}`, lng:"~8",   dep:"MOD.",     c:"#4d96ff", src:"EIA" },
                   { r:"Europe",      crude:`~${(1.5*ratio).toFixed(1)}`, lng:"12–14%",dep:"MOD-HIGH",c:"#845ec2", src:"IEA" },
                 ].map((d,i)=>(
-                  <div key={i} style={{ padding:"8px 0", borderBottom:"1px solid rgba(255,255,255,0.03)" }}>
-                    <div style={{ display:"flex", justifyContent:"space-between", marginBottom:3 }}>
-                      <span style={{ fontWeight:700, fontSize:"0.76rem", color:d.c }}>{d.r}</span>
-                      <span style={{ fontSize:"0.70rem", color:d.dep==="CRITICAL"?"#e84b3a":d.dep==="HIGH"?"#f0a500":"#778899", fontFamily:"'Space Mono',monospace" }}>{d.dep}</span>
+                  <div key={i} style={{ padding:"9px 0", borderBottom:"1px solid rgba(255,255,255,0.03)" }}>
+                    <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4 }}>
+                      <span style={{ fontWeight:700, fontSize:"0.82rem", color:d.c }}>{d.r}</span>
+                      <span style={{ fontSize:"0.65rem", color:d.dep==="CRITICAL"?"#e84b3a":d.dep==="HIGH"?"#f0a500":"#8899aa", fontFamily:"'Space Mono',monospace" }}>{d.dep}</span>
                     </div>
-                    <div style={{ display:"flex", gap:14, fontSize:"0.63rem", color:"#778899" }}>
+                    <div style={{ display:"flex", gap:14, fontSize:"0.7rem", color:"#8899aa" }}>
                       <span>🛢️ <strong style={{color:"#ccd"}}>{d.crude} Mb/d</strong></span>
                       <span>🔵 <strong style={{color:"#ccd"}}>{d.lng} MT/yr</strong></span>
-                      <span style={{ marginLeft:"auto", fontSize:"0.62rem", color:SRC_COLOR[d.src]||"#778899", fontFamily:"'Space Mono',monospace" }}>[{d.src}]</span>
+                      <span style={{ marginLeft:"auto", fontSize:"0.58rem", color:SRC_COLOR[d.src]||"#778899", fontFamily:"'Space Mono',monospace" }}>[{d.src}]</span>
                     </div>
                   </div>
                 ))}
               </div>
             </div>
             <div style={{ marginTop:12, background:"rgba(0,201,167,0.02)", border:"1px solid rgba(0,201,167,0.07)", borderRadius:9, padding:"13px 16px" }}>
-              <div style={{ color:"#00c9a7", fontSize:"0.67rem", letterSpacing:3, fontFamily:"'Space Mono',monospace", marginBottom:7 }}>📡 DATA SOURCES, ACCURACY & LIVE WIRING</div>
-              <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:12, fontSize:"0.64rem", color:"#778899" }}>
+              <div style={{ color:"#00c9a7", fontSize:"0.67rem", letterSpacing:3, fontFamily:"'Space Mono',monospace", marginBottom:8 }}>📡 DATA SOURCES, ACCURACY & LIVE WIRING</div>
+              <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:12, fontSize:"0.72rem", color:"#8899aa" }}>
                 <div><strong style={{color:"#00c9a7"}}>✓ EIA Verified</strong><br/>2022–H1 2025 oil flows: EIA World Chokepoints report (Vortexa tanker tracking). Annual anchors only — monthly values interpolated.</div>
                 <div><strong style={{color:"#f0a500"}}>~ Modeled Estimates</strong><br/>H2 2025 onwards: extrapolated from EIA H1-2025 baseline + geopolitical events. Treat as directional.</div>
                 <div><strong style={{color:"#f0a500"}}>📡 Live Brent Price</strong><br/>Pulled from EIA API v2 (with key) or Yahoo Finance via CORS proxy (no key). Refreshes every 5 min. Add VITE_EIA_API_KEY to .env for official data.</div>
