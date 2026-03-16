@@ -7,13 +7,29 @@ dotenv.config();
 
 const AISSTREAM_URL = "wss://stream.aisstream.io/v0/stream";
 
-// Approximate bounding box for Strait of Hormuz (lat, lon)
+// Approximate bounding box for the wider Persian Gulf (lat, lon)
+// This covers Kuwait / Iraq in the northwest down to the Strait of Hormuz.
 const HORMUZ_BOUNDING_BOX = [
   [
-    [24.5, 54.0], // south‑west corner
-    [27.8, 60.0], // north‑east corner
+    [23.0, 48.0], // south‑west corner (near Saudi/Qatar)
+    [30.5, 58.0], // north‑east corner (near Iran / Gulf of Oman)
   ],
 ];
+
+// Very light land-area boxes [minLat, maxLat, minLon, maxLon] to filter obvious inland points
+// These are intentionally small so we keep most coastal / port traffic visible.
+const LAND_EXCLUSION_BOXES = [
+  [25.2, 25.5, 55.1, 55.4],   // Deep inland Dubai/Sharjah (far from channel)
+  [24.7, 25.0, 51.4, 51.7],   // Inland Qatar (away from main channel)
+  [25.9, 26.1, 50.5, 50.7],   // Bahrain interior (keep coastal anchorage)
+];
+
+function isOnLand(lat, lon) {
+  return LAND_EXCLUSION_BOXES.some(
+    ([minLat, maxLat, minLon, maxLon]) =>
+      lat >= minLat && lat <= maxLat && lon >= minLon && lon <= maxLon
+  );
+}
 
 const AISSTREAM_API_KEY = process.env.AISSTREAM_API_KEY;
 
@@ -44,19 +60,31 @@ function broadcast(message) {
 }
 
 function normalizeAisMessage(raw) {
-  if (!raw || raw.MessageType !== "PositionReport") return null;
-  const pr = raw.Message?.PositionReport;
+  if (!raw || !raw.Message || !raw.Message.PositionReport) return null;
+  const pr = raw.Message.PositionReport;
+  const meta = raw.Metadata;
   if (!pr || pr.Latitude == null || pr.Longitude == null) return null;
 
+  const mmsi =
+    pr.MMSI ?? pr.Mmsi ?? meta?.MMSI ?? meta?.Mmsi ?? null;
+  const lat = pr.Latitude;
+  const lon = pr.Longitude;
+  const ts = pr.Timestamp ?? meta?.Timestamp ?? null;
+  const fallbackId = `pos-${lat}-${lon}-${ts ?? Date.now()}`;
+
   return {
-    mmsi: pr.MMSI,
-    lat: pr.Latitude,
-    lon: pr.Longitude,
-    sog: pr.SpeedOverGround,
-    cog: pr.CourseOverGround,
-    name: pr.Name || `MMSI ${pr.MMSI}`,
+    mmsi: mmsi ?? fallbackId,
+    id: fallbackId,
+    lat,
+    lon,
+    sog: pr.SpeedOverGround ?? pr.Sog ?? null,
+    cog: pr.CourseOverGround ?? pr.Cog ?? null,
+    name:
+      pr.Name ??
+      meta?.ShipName ??
+      (mmsi ? `MMSI ${mmsi}` : `Vessel ${fallbackId.slice(0, 12)}`),
     navStatus: pr.NavigationalStatus,
-    ts: pr.Timestamp,
+    ts,
   };
 }
 
@@ -71,7 +99,10 @@ function connectUpstream() {
       BoundingBoxes: HORMUZ_BOUNDING_BOX,
       FilterMessageTypes: ["PositionReport"],
     };
-    upstream.send(JSON.stringify(subscription));
+    // Guard against race where upstream was closed and nulled before open fires
+    if (upstream && upstream.readyState === WebSocket.OPEN) {
+      upstream.send(JSON.stringify(subscription));
+    }
     // eslint-disable-next-line no-console
     console.log("[AISSTREAM] Connected and subscribed");
   });
@@ -81,6 +112,7 @@ function connectUpstream() {
       const raw = JSON.parse(data.toString());
       const v = normalizeAisMessage(raw);
       if (!v) return;
+      if (isOnLand(v.lat, v.lon)) return; // skip positions on land
       broadcast(v);
     } catch (e) {
       // eslint-disable-next-line no-console

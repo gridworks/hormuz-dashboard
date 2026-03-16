@@ -4,8 +4,13 @@ import { MapContainer, TileLayer, CircleMarker, Tooltip } from "react-leaflet";
 const LOCAL_WS_URL =
   import.meta.env.VITE_AIS_LOCAL_WS_URL || "ws://localhost:4000/ais";
 
+function vesselKey(v) {
+  return v.mmsi ?? v.id ?? `v-${v.lat}-${v.lon}-${v.ts ?? ""}`;
+}
+
 function upsertVessel(list, v) {
-  const idx = list.findIndex((x) => x.mmsi === v.mmsi);
+  const key = vesselKey(v);
+  const idx = list.findIndex((x) => vesselKey(x) === key);
   if (idx === -1) return [...list, v];
   const copy = list.slice();
   copy[idx] = { ...copy[idx], ...v };
@@ -28,7 +33,7 @@ export default function HormuzLiveMap() {
     ws.onmessage = (event) => {
       try {
         const v = JSON.parse(event.data);
-        if (!v || !v.mmsi || v.lat == null || v.lon == null) return;
+        if (!v || v.lat == null || v.lon == null) return;
         setVessels((prev) => upsertVessel(prev, v));
       } catch (e) {
         // eslint-disable-next-line no-console
@@ -50,7 +55,8 @@ export default function HormuzLiveMap() {
     };
   }, []);
 
-  const center = [26.0, 56.3]; // [lat, lon]
+  // Centered on the broader Persian Gulf, zoomed to show Hormuz plus Gulf traffic
+  const center = [26.5, 52.5]; // [lat, lon]
 
   return (
     <div
@@ -78,7 +84,7 @@ export default function HormuzLiveMap() {
             fontFamily: "'Space Mono', monospace",
           }}
         >
-          LIVE AIS · STRAIT OF HORMUZ (REAL‑TIME)
+          LIVE AIS · PERSIAN GULF & STRAIT OF HORMUZ (REAL‑TIME)
         </div>
         <div
           style={{
@@ -131,7 +137,7 @@ export default function HormuzLiveMap() {
           />
           {vessels.map((v) => (
             <CircleMarker
-              key={v.mmsi}
+              key={vesselKey(v)}
               center={[v.lat, v.lon]}
               radius={4}
               pathOptions={{
