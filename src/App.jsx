@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import HormuzLiveMap from "./HormuzLiveMap.jsx";
 
 const EIA_API_KEY = import.meta?.env?.VITE_EIA_API_KEY || "";
 
@@ -153,11 +154,10 @@ function useLiveBrent() {
     async function run() {
       if (EIA_API_KEY) {
         try { const d = await fetchEIA(); if (!cancelled) setData(d); return; }
-        catch(e) { console.warn("EIA fetch failed:", e.message); }
+        catch (_e) { /* EIA unreachable, use fallback */ }
       }
-      try { const d = await fetchYahoo(); if (!cancelled) setData(d); return; }
-      catch(e) { console.warn("Yahoo fetch failed:", e.message); }
-      if (!cancelled) setData({ price: 74.2, change: null, changePercent: null, ts: "2026-03-11", source: "Static fallback (APIs unavailable)", loading: false, error: "Live APIs unreachable — showing last known value" });
+      // Skip Yahoo proxy (often CORS/500); use static fallback when EIA unavailable
+      if (!cancelled) setData({ price: 74.2, change: null, changePercent: null, ts: "2026-03-11", source: "Static fallback (set VITE_EIA_API_KEY for live)", loading: false, error: "Live APIs unreachable — showing last known value" });
     }
 
     run();
@@ -594,6 +594,9 @@ export default function App() {
                 </div>
               </div>
             </div>
+
+            {/* LIVE AIS MAP – STRAIT OF HORMUZ */}
+            <HormuzLiveMap />
           </div>
         )}
 
