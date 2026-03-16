@@ -104,6 +104,21 @@ export default function HormuzLiveMap() {
         </div>
       )}
 
+      {!connected && !error && (
+        <div
+          style={{
+            color: "#8899aa",
+            fontSize: "0.72rem",
+            marginBottom: 8,
+            fontFamily: "'Space Mono', monospace",
+          }}
+        >
+          Live AIS is only available when running locally with{" "}
+          <span style={{ color: "#00c9a7" }}>npm run server</span>. On GitHub
+          Pages this section will show the base map but no vessels.
+        </div>
+      )}
+
       <div style={{ height: 420, borderRadius: 10, overflow: "hidden" }}>
         <MapContainer
           center={center}
