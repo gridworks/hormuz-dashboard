@@ -17,7 +17,7 @@ Single-page React dashboard tracking maritime vessel traffic, oil flows, and LNG
 | Map | Leaflet 1.9.4 + react-leaflet 5 |
 | Backend (local AIS only) | Node.js + Express 4 + ws (WebSocket) |
 | Deployment | GitHub Actions → GitHub Pages |
-| Fonts | Google Fonts: Space Mono (data), Space Grotesk (headings) |
+| Fonts | Google Fonts: JetBrains Mono (data/numbers), Inter (headings/labels) |
 | Styling | Inline styles throughout — no CSS modules, no styled-components |
 
 ---
@@ -71,8 +71,28 @@ hormuz-dashboard/
 ├── server/
 │   └── index.js                   # Express + WebSocket AIS proxy backend
 ├── src/
+│   ├── data/
+│   │   └── index.js               # All constants: MONTHS, ERA, SRC_*, VESSEL_TYPES, FLAGS, CARGO, PRODUCERS, DESTINATIONS
+│   ├── hooks/
+│   │   ├── useLiveBrent.js        # Live Brent crude price polling (EIA → static fallback)
+│   │   └── useBrentHistory.js     # 52-week EIA Brent history
+│   ├── components/
+│   │   ├── Bar.jsx                # Horizontal progress bar
+│   │   ├── Ticker.jsx             # Animated number with units
+│   │   ├── Donut.jsx              # SVG donut chart
+│   │   ├── Spark.jsx              # Spark + BrentSpark sparkline charts
+│   │   ├── Timeline.jsx           # Month slider, era band, sparklines, legend
+│   │   ├── LiveBrentPanel.jsx     # Live Brent price display with status indicator
+│   │   └── DataQualityBanner.jsx  # EIA Verified / Modeled Estimate / AIS Tracked badge
+│   ├── styles/
+│   │   └── tokens.css             # All design tokens: fonts, sizes, weights, colors, era colors
+│   ├── tabs/
+│   │   ├── OverviewTab.jsx        # Geography diagram, producers, destinations, AIS map
+│   │   ├── FleetTab.jsx           # Vessel types, tanker classes, flag registry
+│   │   ├── CargoTab.jsx           # Cargo cards + summary stats
+│   │   └── OriginsTab.jsx         # Loading terminals + destination flows
 │   ├── main.jsx                   # React entry point (React 19 createRoot)
-│   ├── App.jsx                    # Entire frontend (~900 lines, monolithic)
+│   ├── App.jsx                    # ~85 lines: state, KPI strip, header, tab routing
 │   ├── HormuzLiveMap.jsx          # Leaflet map with live AIS vessel markers
 │   ├── App.css                    # Minimal boilerplate (mostly unused)
 │   └── index.css                  # Global dark theme, fonts, button styles
@@ -88,10 +108,10 @@ hormuz-dashboard/
 
 ### Data Model
 
-All historical data lives as constants at the top of `App.jsx`:
+All historical data lives as named exports in `src/data/index.js`:
 
 - **`MONTHS`** — 39-entry array (Jan 2023–Mar 2026), each with: `transits`, `oil`, `lng`, `dwt`, `era`, `source` (EIA/EST/AIS), plus geopolitical notes
-- **`ERAS`** — 5 color-coded geopolitical states: normal (green) → tension (yellow) → escalation (orange) → conflict (red) → blockade (magenta)
+- **`ERA`** — 5 color-coded geopolitical states: normal (green) → tension (yellow) → escalation (orange) → conflict (red) → blockade (magenta)
 - **`VESSEL_TYPES`**, **`FLAGS`**, **`CARGO`**, **`PRODUCERS`**, **`DESTINATIONS`** — supporting lookup tables
 
 ### Data Scaling
@@ -104,30 +124,50 @@ const ratio = selectedMonth.transits / MONTHS[0].transits;
 
 ### Live Data Hooks
 
-- **`useLiveBrent()`** — Fetches Brent crude from EIA API, falls back to Stooq (via allorigins proxy), falls back to static `$74.2`. Refreshes every 5 minutes.
+Both hooks live in `src/hooks/` and import `EIA_API_KEY` from `src/data/index.js`:
+
+- **`useLiveBrent()`** — Fetches Brent crude from EIA API, falls back to static `$74.2`. Refreshes every 5 minutes.
 - **`useBrentHistory()`** — Fetches 52-week EIA Brent series (requires `VITE_EIA_API_KEY`).
 
 ### Component Structure
 
-Everything lives in `App.jsx` — no component file splitting. Internal components:
+Components are split across `src/components/` (reusable UI) and `src/tabs/` (tab page content). `App.jsx` is ~85 lines and handles only state, the KPI strip, header, and tab routing.
+
+**`src/components/`**
 - `<Bar>` — horizontal progress bar
 - `<Ticker>` — animated number with units
 - `<Donut>` — custom inline SVG donut chart
-- `<Spark>` / `<BrentSpark>` — sparkline SVG charts
+- `<Spark>` / `<BrentSpark>` — sparkline SVG charts (same file)
 - `<Timeline>` — monthly slider with era coloring + KPI sparklines
 - `<LiveBrentPanel>` — live price display with status indicator
 - `<DataQualityBanner>` — EIA Verified / Modeled Estimate / AIS Tracked badge
 
-Tabs: Overview | Fleet | Cargo | Origins & Destinations
+**`src/tabs/`**
+- `<OverviewTab>` — props: `era`, `sel`, `ratio`
+- `<FleetTab>` — props: `era`, `ratio`, `hFlag`, `setHFlag`
+- `<CargoTab>` — props: `era`, `sel`, `ratio`
+- `<OriginsTab>` — props: `ratio`, `sel`
 
-### Styling Conventions
+---
 
-- **All styles are inline** — no external CSS classes for layout/theming
-- Dark background: `#0a0f1a`, primary text: `#dde4f0`
-- Space Mono for data/numbers, Space Grotesk for headings/labels
+## Coding Conventions
+
+### Styling
+- All styles are **inline JSX** — no CSS classes, no CSS modules, no styled-components
+- All colors, fonts, and spacing must reference CSS variables from `src/styles/tokens.css` using `var(--token-name)` syntax in inline styles
+- Example: `style={{ fontFamily: 'var(--font-sans)', color: 'var(--color-primary)' }}`
+- Do not add new CSS classes to `index.css` or `App.css` unless absolutely necessary
+- Dark background: `var(--color-bg)`, primary text: `var(--color-text)`
+- JetBrains Mono (`var(--font-mono)`) for data/numbers, Inter (`var(--font-sans)`) for headings/labels
 - Era colors drive accent colors throughout the UI
 - Opacity used for secondary/disabled states
-- Blink animation (`animation: "blink 2s infinite"`) for status indicators — defined as a global CSS keyframe
+- Blink animation (`animation: "blink 2s infinite"`) for status indicators — defined as a global CSS keyframe in `index.css`
+
+### General
+- Ask before refactoring existing file structure
+- Prefer small focused changes over large sweeping refactors
+- Do not change multiple things in one pass without confirmation
+- When in doubt about the scope of a change, do the smallest version first and ask before expanding
 
 ### AIS Map (`HormuzLiveMap.jsx`)
 
@@ -162,10 +202,12 @@ Vite base path is `/hormuz-dashboard/` — required for GitHub Pages subdirector
 
 ## Key Gotchas
 
-- **Monolithic `App.jsx`** — all UI logic, data, and components are in one ~900-line file. Don't split without a clear plan.
+- **`App.jsx` is ~85 lines** — state, KPI strip, header, and tab routing only. Data is in `src/data/`, hooks in `src/hooks/`, UI in `src/components/`, tab pages in `src/tabs/`.
 - **No state management library** — state is local `useState` + custom hooks only. Props are passed directly.
 - **Inline styles everywhere** — adding CSS classes won't work unless you also add matching rules to `index.css` or `App.css`.
+- **All design tokens in `src/styles/tokens.css`** — change fonts, colors, and sizes there first, not in individual component files.
 - **AIS data is local-only** — the live map only works when `npm run server` is running locally. GitHub Pages shows the map in offline/demo mode.
-- **Brent price fallback chain** — EIA → Stooq (via allorigins) → static `$74.2`. If adding a new data source, insert before the static fallback.
+- **Brent price fallback chain** — EIA → static `$74.2`. If adding a new data source, insert before the static fallback.
 - **Vite base path** — `vite.config.js` sets `base: '/hormuz-dashboard/'`. Asset paths in `index.html` must be relative, not absolute.
 - **React 19** — uses `createRoot`, no legacy ReactDOM.render.
+- **Fixed layout width** — the root app div has `width: 100%` to prevent horizontal reflow when the timeline date changes. The body uses `display: flex` (Vite boilerplate) which causes flex items to size to content by default; without `width: 100%` on the root div, changing era labels or source labels shifts the entire dashboard horizontally. Do not remove `width: 100%` from the root div, and do not use content-driven widths on the root container.

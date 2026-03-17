@@ -1,0 +1,106 @@
+/* ============================================================
+   HORMUZ DASHBOARD — DESIGN TOKENS
+   All typography and color values for the entire dashboard.
+   Change a value here to update every component that uses it.
+   ============================================================ */
+
+:root {
+
+  /* ── TYPOGRAPHY: FONT FAMILIES ── */
+  --font-display: 'Inter', sans-serif;
+  --font-mono:    'JetBrains Mono', monospace;
+
+  /* ── TYPOGRAPHY: FONT WEIGHTS ── */
+  --fw-500: 500;
+  --fw-600: 600;
+  --fw-700: 700;
+
+  /* ── TYPOGRAPHY: FONT SIZES ──
+     Minimum floor: 11px for secondary text, 12px for labels/badges.
+     Nothing below 11px anywhere in the dashboard.                    */
+  --fs-58:  11px;      /* source tags, tiny labels       (was 9.28px) */
+  --fs-62:  11px;      /* KPI category labels, meta      (was 9.92px) */
+  --fs-63:  11px;      /* flag percent                   (was 10.08px)*/
+  --fs-65:  12px;      /* section headers, SELECTED PERIOD(was 10.4px)*/
+  --fs-67:  11px;      /* header subtitle, small labels  (was 10.72px)*/
+  --fs-68:  12px;      /* timeline badges, port type rows(was 10.88px)*/
+  --fs-70:  0.70rem;   /* quick-jump buttons, map labels */
+  --fs-72:  0.72rem;   /* panel body text, era badge     */
+  --fs-74:  0.74rem;   /* tanker class rows              */
+  --fs-75:  0.75rem;   /* tabs, banner text              */
+  --fs-76:  0.76rem;   /* vessel type names              */
+  --fs-78:  0.78rem;   /* destination regions            */
+  --fs-80:  0.80rem;   /* port names                     */
+  --fs-82:  0.82rem;   /* data label names               */
+  --fs-85:  0.85rem;   /* flag vessel count              */
+  --fs-87:  0.87rem;   /* cargo names                    */
+  --fs-90:  0.90rem;   /* sparkline value readouts       */
+  --fs-95:  0.95rem;   /* change indicator, stat values  */
+  --fs-110: 1.1rem;    /* timeline period label          */
+  --fs-140: 1.4rem;    /* h1 / main title                */
+  --fs-160: 1.6rem;    /* summary stat values / Ticker   */
+  --fs-180: 1.8rem;    /* loading dash                   */
+  --fs-210: 2.1rem;    /* Brent price                    */
+
+  /* ── TYPOGRAPHY: LINE HEIGHTS ── */
+  --lh-tight: 1.4;
+  --lh-note:  1.45;
+
+  /* ── COLORS: BACKGROUNDS ── */
+  --color-bg:       #0a0f1a;                  /* app root bg            */
+  --color-bg-header:#0d1626;                  /* header gradient start  */
+  --color-bg-card:  rgba(13,22,38,0.8);       /* panel / card bg        */
+  --color-bg-panel: rgba(10,15,26,0.96);      /* timeline / brent panel */
+  --color-bg-kpi:   rgba(10,15,26,0.85);      /* KPI strip cells        */
+  --color-bg-tabs:  rgba(10,15,26,0.9);       /* tab bar bg             */
+  --color-bg-map:   rgba(13,22,38,0.9);       /* AIS map wrapper        */
+  --color-bg-spark: rgba(0,0,0,0.15);         /* sparkline card         */
+  --color-bg-bar:   #1a2332;                  /* bar track              */
+  --color-grid:     rgba(0,201,167,0.018);    /* dot-grid overlay       */
+
+  /* ── COLORS: TEXT ── */
+  --color-text:   #dde4f0;   /* primary body text        */
+  --color-white:  #fff;      /* pure white               */
+  --color-text-1: #aabbcc;   /* light secondary text     */
+  --color-text-2: #99aabb;   /* secondary text           */
+  --color-text-3: #8899aa;   /* muted text               */
+  --color-text-4: #778899;   /* label color              */
+  --color-text-5: #667788;   /* dimmer label             */
+  --color-text-6: #6677aa;   /* inactive tab             */
+  --color-text-7: #556677;   /* very dim / timestamp     */
+  --color-text-8: #8899bb;   /* quick-jump inactive      */
+  --color-text-9: #ccd;      /* shorthand light          */
+
+  /* ── COLORS: BORDERS ── */
+  --color-border-card:   rgba(255,255,255,0.04);  /* card border        */
+  --color-border-row:    rgba(255,255,255,0.03);  /* table row divider  */
+  --color-border-btn:    rgba(255,255,255,0.07);  /* button border      */
+  --color-border-subtle: rgba(255,255,255,0.1);   /* tick marks         */
+
+  /* ── COLORS: ERA / STATUS ── */
+  --color-normal:      #00c9a7;  /* normal ops / EIA verified */
+  --color-tension:     #f0a500;  /* elevated tension / est.   */
+  --color-escalation:  #f07b3f;  /* active escalation         */
+  --color-conflict:    #e84b3a;  /* conflict zone / red       */
+  --color-blockade:    #ff00ff;  /* strait closed / magenta   */
+  --color-ais:         #ff79c6;  /* AIS tracked / live        */
+
+  /* ── COLORS: ACCENT PALETTE ── */
+  --color-teal:         #4ecdc4;
+  --color-green:        #00b894;
+  --color-blue:         #0984e3;
+  --color-blue-light:   #4d96ff;
+  --color-blue-sky:     #74b9ff;
+  --color-purple:       #6c5ce7;
+  --color-purple-light: #a29bfe;
+  --color-purple-dark:  #845ec2;
+  --color-pink:         #fd79a8;
+  --color-yellow:       #ffd93d;
+  --color-peach:        #fdcb6e;
+  --color-green-2:      #6bcb77;
+  --color-red-light:    #ff7675;
+  --color-cyan:         #55efc4;
+  --color-gray:         #636e72;
+  --color-gray-light:   #b2bec3;
+  --color-red-dark:     #d63031;
+}

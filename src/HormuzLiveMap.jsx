@@ -61,7 +61,7 @@ export default function HormuzLiveMap() {
   return (
     <div
       style={{
-        background: "rgba(13,22,38,0.9)",
+        background: "var(--color-bg-map)",
         border: "1px solid rgba(0,201,167,0.3)",
         borderRadius: 12,
         padding: "14px 16px",
@@ -78,19 +78,19 @@ export default function HormuzLiveMap() {
       >
         <div
           style={{
-            color: "#778899",
-            fontSize: "0.7rem",
+            color: "var(--color-text-4)",
+            fontSize: "var(--fs-70)",
             letterSpacing: 3,
-            fontFamily: "'Space Mono', monospace",
+            fontFamily: "var(--font-mono)",
           }}
         >
           LIVE AIS · PERSIAN GULF & STRAIT OF HORMUZ (REAL‑TIME)
         </div>
         <div
           style={{
-            fontSize: "0.7rem",
-            color: connected ? "#00c9a7" : "#e84b3a",
-            fontFamily: "'Space Mono', monospace",
+            fontSize: "var(--fs-70)",
+            color: connected ? "var(--color-normal)" : "var(--color-conflict)",
+            fontFamily: "var(--font-mono)",
           }}
         >
           {connected ? `${vessels.length} vessels` : "offline"}
@@ -100,10 +100,10 @@ export default function HormuzLiveMap() {
       {error && (
         <div
           style={{
-            color: "#e84b3a",
-            fontSize: "0.75rem",
+            color: "var(--color-conflict)",
+            fontSize: "var(--fs-75)",
             marginBottom: 8,
-            fontFamily: "'Space Mono', monospace",
+            fontFamily: "var(--font-mono)",
           }}
         >
           ⚠ {error}
@@ -113,14 +113,14 @@ export default function HormuzLiveMap() {
       {!connected && !error && (
         <div
           style={{
-            color: "#8899aa",
-            fontSize: "0.72rem",
+            color: "var(--color-text-3)",
+            fontSize: "var(--fs-72)",
             marginBottom: 8,
-            fontFamily: "'Space Mono', monospace",
+            fontFamily: "var(--font-mono)",
           }}
         >
           Live AIS is only available when running locally with{" "}
-          <span style={{ color: "#00c9a7" }}>npm run server</span>. On GitHub
+          <span style={{ color: "var(--color-normal)" }}>npm run server</span>. On GitHub
           Pages this section will show the base map but no vessels.
         </div>
       )}
@@ -141,13 +141,13 @@ export default function HormuzLiveMap() {
               center={[v.lat, v.lon]}
               radius={4}
               pathOptions={{
-                color: "#ff79c6",
-                fillColor: "#ff79c6",
+                color: "var(--color-ais)",
+                fillColor: "var(--color-ais)",
                 fillOpacity: 0.9,
               }}
             >
               <Tooltip direction="top">
-                <div style={{ fontSize: "0.7rem" }}>
+                <div style={{ fontSize: "var(--fs-70)" }}>
                   <div>
                     <strong>{v.name}</strong>
                   </div>
@@ -164,4 +164,3 @@ export default function HormuzLiveMap() {
     </div>
   );
 }
-
